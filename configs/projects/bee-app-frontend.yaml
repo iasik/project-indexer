@@ -1,0 +1,46 @@
+# =============================================================================
+# Bee App Frontend - Mobile/Web App (Next.js/React)
+# =============================================================================
+
+project_id: "bee-app-frontend"
+display_name: "Bee App Frontend"
+source_path: "app-frontend"
+
+include_extensions:
+  - ".ts"
+  - ".tsx"
+  - ".js"
+  - ".jsx"
+  - ".md"
+  - ".yaml"
+  - ".yml"
+  - ".json"
+  - ".css"
+
+exclude_paths:
+  - "node_modules"
+  - ".git"
+  - ".next"
+  - "out"
+  - "public"
+  - ".idea"
+  - ".vscode"
+  - "docker"
+  - "certificates"
+
+chunking:
+  min_tokens: 50
+  max_tokens: 1500
+  code:
+    strategy: "function"
+  markdown:
+    strategy: "heading"
+
+metadata:
+  language: "typescript"
+  framework: "nextjs"
+  tags:
+    - "frontend"
+    - "app"
+    - "mobile"
+    - "react"

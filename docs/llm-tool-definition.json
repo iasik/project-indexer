@@ -1,0 +1,52 @@
+{
+    "name": "retrieve_code_context",
+    "description": "Retrieves relevant code snippets and documentation from the indexed codebase. Use this tool to find implementation details, function definitions, and related code before answering questions about the codebase. IMPORTANT: Only answer based on the context returned by this tool. If no relevant context is found, say 'I don't have information about that in the codebase.'",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "project_id": {
+                "type": "string",
+                "description": "The project identifier to search within (e.g., 'crm-backend', 'randevu-app', 'mobil-api'). Ask the user which project they want to search if not clear."
+            },
+            "query": {
+                "type": "string",
+                "description": "Natural language query describing what code or information you're looking for. Be specific and include relevant technical terms."
+            },
+            "top_k": {
+                "type": "integer",
+                "description": "Number of results to return. Use 5 for focused queries, 10 for broader searches. Maximum is 20.",
+                "default": 5
+            },
+            "filters": {
+                "type": "object",
+                "description": "Optional filters to narrow down search results",
+                "properties": {
+                    "module": {
+                        "type": "string",
+                        "description": "Filter by module/package name (e.g., 'auth', 'api', 'models')"
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Filter by programming language (e.g., 'go', 'typescript', 'python')"
+                    },
+                    "symbol_type": {
+                        "type": "string",
+                        "description": "Filter by symbol type",
+                        "enum": [
+                            "function",
+                            "method",
+                            "struct",
+                            "interface",
+                            "type",
+                            "heading"
+                        ]
+                    }
+                }
+            }
+        },
+        "required": [
+            "project_id",
+            "query"
+        ]
+    }
+}

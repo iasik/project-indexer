@@ -1,0 +1,74 @@
+services:
+  # =============================================================================
+  # QDRANT - Vector Database
+  # =============================================================================
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: project-indexer-qdrant
+    ports:
+      - "6333:6333"  # REST API
+      - "6334:6334"  # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    restart: unless-stopped
+
+  # =============================================================================
+  # OLLAMA - Embedding Model Server
+  # =============================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: project-indexer-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    # Model yüklemek için:
+    # docker exec project-indexer-ollama ollama pull nomic-embed-text
+
+  # =============================================================================
+  # RETRIEVAL TOOL - HTTP API Server
+  # =============================================================================
+  retrieval-tool:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.retrieval
+    container_name: project-indexer-retrieval-tool
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./configs:/app/configs:ro
+    depends_on:
+      - qdrant
+      - ollama
+    environment:
+      - CONFIG_PATH=/app/configs/config.yaml
+    restart: unless-stopped
+
+  # =============================================================================
+  # INDEXER - CLI Tool (runs on demand)
+  # =============================================================================
+  indexer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.indexer
+    container_name: project-indexer-indexer
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./data:/app/data
+      - ${SOURCES_PATH:-./sources}:/sources:ro
+    depends_on:
+      - qdrant
+      - ollama
+    environment:
+      - CONFIG_PATH=/app/configs/config.yaml
+    profiles:
+      - tools  # Sadece manuel çalıştırılır: docker-compose run indexer
+
+volumes:
+  qdrant_data:
+    driver: local
+  ollama_data:
+    driver: local

@@ -1,0 +1,48 @@
+# =============================================================================
+# INDEXER - Dockerfile
+# =============================================================================
+# Build: docker build -f docker/Dockerfile.indexer -t project-indexer/indexer .
+# =============================================================================
+
+FROM golang:1.22-alpine AS builder
+
+# Build dependencies
+RUN apk add --no-cache git ca-certificates
+
+WORKDIR /build
+
+# Copy go mod files first for caching
+COPY go.mod go.sum* ./
+RUN go mod download || true
+
+# Copy source code
+COPY . .
+
+# Ensure dependencies are resolved
+RUN go mod tidy
+
+# Build binary
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o indexer ./cmd/indexer
+
+# =============================================================================
+# Runtime image
+# =============================================================================
+FROM alpine:3.19
+
+RUN apk add --no-cache ca-certificates tzdata
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /build/indexer /app/indexer
+
+# Create directories
+RUN mkdir -p /app/configs /app/data /sources
+
+# Run as non-root user
+RUN adduser -D -u 1000 indexer
+RUN chown -R indexer:indexer /app /sources
+USER indexer
+
+ENTRYPOINT ["/app/indexer"]
+CMD ["--help"]

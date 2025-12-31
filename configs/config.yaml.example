@@ -1,0 +1,119 @@
+# =============================================================================
+# PROJECT INDEXER - GLOBAL CONFIGURATION
+# =============================================================================
+# Bu dosyayı config.yaml olarak kopyalayın ve düzenleyin.
+# =============================================================================
+
+# =============================================================================
+# EMBEDDING PROVIDER
+# =============================================================================
+embedding:
+  # Provider seçimi: ollama | openai | huggingface
+  provider: "ollama"
+  
+  # Model adı (provider'a göre değişir)
+  model: "nomic-embed-text"
+  
+  # Provider endpoint
+  endpoint: "http://ollama:11434"
+  
+  # Embedding boyutu (model'e göre ayarla)
+  # nomic-embed-text: 768
+  # text-embedding-3-small: 1536
+  dimensions: 768
+  
+  # Batch işleme boyutu
+  batch_size: 32
+  
+  # Request timeout
+  timeout: "30s"
+  
+  # OpenAI kullanımı için:
+  # provider: "openai"
+  # model: "text-embedding-3-small"
+  # endpoint: "https://api.openai.com/v1"
+  # api_key_env: "OPENAI_API_KEY"
+  # dimensions: 1536
+
+# =============================================================================
+# VECTOR DATABASE PROVIDER
+# =============================================================================
+vectordb:
+  # Provider seçimi: qdrant | milvus | weaviate
+  provider: "qdrant"
+  
+  # Provider endpoint
+  endpoint: "http://qdrant:6333"
+  
+  # Collection adı (tüm projeler tek collection'da, filter ile ayrılır)
+  collection_name: "code_chunks"
+  
+  # Request timeout
+  timeout: "30s"
+  
+  # Milvus kullanımı için:
+  # provider: "milvus"
+  # endpoint: "http://milvus:19530"
+
+# =============================================================================
+# PROJECT SETTINGS
+# =============================================================================
+projects:
+  # Proje config dosyalarının dizini
+  config_dir: "/app/configs/projects"
+  
+  # Mount edilen kaynak kod base path
+  source_base_path: "/sources"
+
+# =============================================================================
+# CHUNKING DEFAULTS
+# =============================================================================
+# Bu değerler proje config'inde override edilebilir
+chunking:
+  # Minimum chunk token sayısı (altındakiler merge edilir)
+  min_tokens: 200
+  
+  # İdeal chunk boyutu
+  ideal_tokens: 500
+  
+  # Maximum chunk boyutu
+  max_tokens: 800
+  
+  # Küçük chunk'ları parent'a merge et
+  merge_small_chunks: true
+
+# =============================================================================
+# INDEX CACHE
+# =============================================================================
+cache:
+  # Cache dosyalarının dizini
+  dir: "/app/data/index-cache"
+  
+  # Format: json
+  format: "json"
+
+# =============================================================================
+# HTTP SERVER (Retrieval Tool)
+# =============================================================================
+server:
+  # Port numarası
+  port: 8080
+  
+  # Request okuma timeout
+  read_timeout: "30s"
+  
+  # Response yazma timeout
+  write_timeout: "30s"
+  
+  # Graceful shutdown timeout
+  shutdown_timeout: "10s"
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+logging:
+  # Log seviyesi: debug | info | warn | error
+  level: "info"
+  
+  # Format: json | text
+  format: "json"

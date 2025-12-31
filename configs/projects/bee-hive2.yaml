@@ -1,0 +1,46 @@
+# =============================================================================
+# Bee Hive2 - Main Backend Application (Laravel/PHP)
+# =============================================================================
+
+project_id: "bee-hive2"
+display_name: "Bee Hive2 Backend"
+source_path: "hive2"
+
+include_extensions:
+  - ".php"
+  - ".js"
+  - ".ts"
+  - ".vue"
+  - ".blade.php"
+  - ".md"
+  - ".yaml"
+  - ".yml"
+  - ".json"
+
+exclude_paths:
+  - "vendor"
+  - "node_modules"
+  - ".git"
+  - "storage"
+  - "bootstrap/cache"
+  - "public"
+  - "tests"
+  - ".idea"
+  - ".vscode"
+  - "docker"
+
+chunking:
+  min_tokens: 50
+  max_tokens: 1500
+  code:
+    strategy: "function"
+  markdown:
+    strategy: "heading"
+
+metadata:
+  language: "php"
+  framework: "laravel"
+  tags:
+    - "backend"
+    - "api"
+    - "hive2"

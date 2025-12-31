@@ -1,0 +1,279 @@
+openapi: 3.0.3
+info:
+  title: Project Indexer Retrieval Tool API
+  description: |
+    HTTP API for semantic code search across indexed projects.
+    This tool is designed to be called by LLMs/Copilot for retrieving
+    relevant code context.
+    
+    ## Usage
+    
+    1. Call POST /retrieve with a natural language query
+    2. The API returns relevant code chunks from the specified project
+    3. Use the returned content as context for LLM responses
+    
+    ## Important Notes
+    
+    - Always specify `project_id` to ensure project isolation
+    - The API returns raw code/text without summarization
+    - Use filters to narrow down results by module or language
+  version: 1.0.0
+  contact:
+    name: Project Indexer
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: http://retrieval-tool:8080
+    description: Docker Compose internal
+
+paths:
+  /retrieve:
+    post:
+      summary: Semantic code search
+      description: |
+        Performs semantic search over indexed code chunks.
+        Returns the most relevant code snippets for the given query.
+      operationId: retrieve
+      tags:
+        - Retrieval
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetrieveRequest'
+            examples:
+              basic:
+                summary: Basic query
+                value:
+                  project_id: "crm-backend"
+                  query: "How does authentication work?"
+                  top_k: 5
+              filtered:
+                summary: Query with filters
+                value:
+                  project_id: "crm-backend"
+                  query: "token refresh logic"
+                  top_k: 10
+                  filters:
+                    module: "auth"
+                    language: "go"
+      responses:
+        '200':
+          description: Successful search
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetrieveResponse'
+              example:
+                results:
+                  - content: "func RefreshToken(ctx context.Context, oldToken string) (*Token, error) {\n    // Validate old token\n    claims, err := validateToken(oldToken)\n    if err != nil {\n        return nil, err\n    }\n    // Generate new token\n    return generateToken(claims.UserID)\n}"
+                    source: "auth/token.go"
+                    symbol: "RefreshToken"
+                    symbol_type: "function"
+                    project_id: "crm-backend"
+                    module: "auth"
+                    language: "go"
+                    start_line: 45
+                    end_line: 55
+                    score: 0.89
+                query_time_ms: 45
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "project_id is required"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "failed to process query"
+
+  /health:
+    get:
+      summary: Health check
+      description: Returns the health status of the service and its dependencies.
+      operationId: health
+      tags:
+        - System
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "healthy"
+                components:
+                  embedder: "ok"
+                  vectordb: "ok"
+                version: "1.0.0"
+        '503':
+          description: Service is degraded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "degraded"
+                components:
+                  embedder: "ok"
+                  vectordb: "error: connection refused"
+                version: "1.0.0"
+
+  /:
+    get:
+      summary: API info
+      description: Returns basic API information.
+      operationId: root
+      tags:
+        - System
+      responses:
+        '200':
+          description: API information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  version:
+                    type: string
+                  endpoints:
+                    type: array
+                    items:
+                      type: string
+
+components:
+  schemas:
+    RetrieveRequest:
+      type: object
+      required:
+        - project_id
+        - query
+      properties:
+        project_id:
+          type: string
+          description: The project identifier to search within
+          example: "crm-backend"
+        query:
+          type: string
+          description: Natural language search query
+          example: "How does the login function validate credentials?"
+        top_k:
+          type: integer
+          description: Number of results to return (default 5, max 20)
+          minimum: 1
+          maximum: 20
+          default: 5
+        filters:
+          $ref: '#/components/schemas/RetrieveFilters'
+
+    RetrieveFilters:
+      type: object
+      description: Optional filters to narrow search results
+      properties:
+        module:
+          type: string
+          description: Filter by module/package name
+          example: "auth"
+        language:
+          type: string
+          description: Filter by programming language
+          example: "go"
+        symbol_type:
+          type: string
+          description: Filter by symbol type
+          enum:
+            - function
+            - method
+            - struct
+            - interface
+            - type
+            - heading
+            - file
+
+    RetrieveResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RetrieveResult'
+        query_time_ms:
+          type: integer
+          description: Query execution time in milliseconds
+
+    RetrieveResult:
+      type: object
+      properties:
+        content:
+          type: string
+          description: The actual code or text content
+        source:
+          type: string
+          description: File path within the project
+        symbol:
+          type: string
+          description: Symbol name (function, struct, heading, etc.)
+        symbol_type:
+          type: string
+          description: Type of symbol
+        project_id:
+          type: string
+          description: Project this result belongs to
+        module:
+          type: string
+          description: Module/package name
+        language:
+          type: string
+          description: Programming language
+        start_line:
+          type: integer
+          description: Starting line number in the file
+        end_line:
+          type: integer
+          description: Ending line number in the file
+        score:
+          type: number
+          format: float
+          description: Similarity score (0.0 to 1.0)
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - healthy
+            - degraded
+        components:
+          type: object
+          additionalProperties:
+            type: string
+        version:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+
+tags:
+  - name: Retrieval
+    description: Code retrieval operations
+  - name: System
+    description: System and health endpoints

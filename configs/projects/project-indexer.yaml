@@ -1,0 +1,49 @@
+# =============================================================================
+# Project Indexer - Self-indexing Configuration
+# =============================================================================
+# Bu proje, project-indexer'ın kendisini indexlemek için kullanılır.
+# Test ve demo amaçlıdır.
+
+# Benzersiz proje tanımlayıcısı
+project_id: "project-indexer"
+
+# Görünen ad
+display_name: "Project Indexer (Self)"
+
+# Kaynak kod dizini (source_base_path'e göre relative)
+# Boş veya "." ise source_base_path'in kendisi kullanılır
+source_path: "."
+
+# Indexlenecek dosya uzantıları
+include_extensions:
+  - ".go"
+  - ".md"
+  - ".yaml"
+  - ".yml"
+
+# Hariç tutulacak dizinler
+exclude_paths:
+  - "vendor"
+  - ".git"
+  - "node_modules"
+  - ".idea"
+  - ".vscode"
+  - "data"
+
+# Chunking ayarları
+chunking:
+  min_tokens: 50
+  max_tokens: 1500
+  code:
+    strategy: "function"
+  markdown:
+    strategy: "heading"
+
+# Metadata (opsiyonel)
+metadata:
+  language: "go"
+  framework: "stdlib"
+  tags:
+    - "rag"
+    - "indexer"
+    - "retrieval"

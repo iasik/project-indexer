@@ -1,0 +1,66 @@
+# =============================================================================
+# PROJECT: Example Project
+# =============================================================================
+# Bu dosyayı kendi proje adınızla kopyalayın ve düzenleyin.
+# Örnek: configs/projects/crm-backend.yaml
+# =============================================================================
+
+# Benzersiz proje tanımlayıcı (küçük harf, tire ile)
+project_id: "example-project"
+
+# Görüntüleme adı
+display_name: "Example Project"
+
+# Kaynak kod yolu (source_base_path'e göre relative)
+# Örnek: /sources/example-project
+source_path: "example-project"
+
+# =============================================================================
+# FILE FILTERS
+# =============================================================================
+
+# Dahil edilecek dosya uzantıları
+include_extensions:
+  - ".go"
+  - ".md"
+  - ".sql"
+  - ".yaml"
+  - ".json"
+
+# Hariç tutulacak yollar (glob pattern)
+exclude_paths:
+  - "vendor/"
+  - "node_modules/"
+  - "testdata/"
+  - "*_test.go"
+  - ".git/"
+  - "*.min.js"
+  - "*.min.css"
+
+# =============================================================================
+# CHUNKING OVERRIDES
+# =============================================================================
+# Global defaults'ları override eder (opsiyonel)
+chunking:
+  code:
+    # Kod chunking stratejisi: function | file | fixed
+    strategy: "function"
+  
+  markdown:
+    # Markdown chunking stratejisi: heading | paragraph | fixed
+    strategy: "heading"
+  
+  # Bu proje için özel değerler (opsiyonel)
+  # min_tokens: 150
+  # ideal_tokens: 400
+  # max_tokens: 700
+
+# =============================================================================
+# METADATA
+# =============================================================================
+# Opsiyonel, arama/filtreleme için kullanılabilir
+metadata:
+  team: "backend"
+  tags:
+    - "api"
+    - "golang"

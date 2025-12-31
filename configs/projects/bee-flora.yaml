@@ -1,0 +1,46 @@
+# =============================================================================
+# Bee Flora - Customer Portal (Next.js/React)
+# =============================================================================
+
+project_id: "bee-flora"
+display_name: "Bee Flora Portal"
+source_path: "flora"
+
+include_extensions:
+  - ".ts"
+  - ".tsx"
+  - ".js"
+  - ".jsx"
+  - ".md"
+  - ".yaml"
+  - ".yml"
+  - ".json"
+  - ".css"
+
+exclude_paths:
+  - "node_modules"
+  - ".git"
+  - ".next"
+  - "out"
+  - "public"
+  - ".idea"
+  - ".vscode"
+  - "docker"
+  - "certificates"
+
+chunking:
+  min_tokens: 50
+  max_tokens: 1500
+  code:
+    strategy: "function"
+  markdown:
+    strategy: "heading"
+
+metadata:
+  language: "typescript"
+  framework: "nextjs"
+  tags:
+    - "frontend"
+    - "portal"
+    - "customer"
+    - "react"
