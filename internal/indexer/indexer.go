@@ -380,10 +380,10 @@ func (idx *Indexer) processFiles(
 	resultCh := make(chan fileResult, len(files))
 
 	// Token limit for embedding model (nomic-embed-text = 2048)
-	// Using ~3.0 chars per token for conservative estimation
-	// (actual tokenization varies by content type)
+	// Using ~2.5 chars per token for conservative estimation
+	// This catches chunks that might get truncated by the model
 	const maxTokens = 2048
-	const charsPerToken = 3.0
+	const charsPerToken = 2.5
 
 	// Start workers
 	var wg sync.WaitGroup
