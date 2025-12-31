@@ -6,8 +6,10 @@ Multi-project, LLM-agnostic RAG indexleme ve retrieval sistemi.
 
 - 🔌 **Vendor-Independent**: Embedding ve Vector DB provider'ları config ile değiştirilebilir
 - 📁 **Multi-Project**: Birden fazla projeyi izole şekilde indexle ve sorgula
-- ⚡ **Incremental**: Sadece değişen dosyaları yeniden indexle
+- ⚡ **Incremental**: Sadece değişen dosyaları yeniden indexle (chunk-level diffing)
+- 🎯 **Semantic Chunking**: TypeScript, PHP, Go, Markdown için akıllı chunking
 - 🔄 **Hot Reload**: SIGHUP ile config değişikliklerini uygula
+- 📊 **Progress & Reporting**: ETA ile ilerleme gösterimi, oversized chunk raporları
 - 🐳 **Docker-Ready**: `docker-compose up` ile hemen kullanıma hazır
 
 ## Hızlı Başlangıç
@@ -94,6 +96,22 @@ docker kill -s HUP project-indexer-retrieval-tool-1
   }
 }
 ```
+
+### Error Response
+
+```json
+{
+  "error": "project_id is required",
+  "code": "MISSING_REQUIRED_FIELD",
+  "request_id": "a1b2c3d4e5f6g7h8"
+}
+```
+
+**Error Codes:**
+- `INVALID_REQUEST` - Geçersiz request body
+- `MISSING_REQUIRED_FIELD` - Zorunlu alan eksik
+- `EMBEDDING_FAILED` - Embedding oluşturulamadı
+- `SEARCH_FAILED` - Vector DB sorgusu başarısız
 
 ## Konfigürasyon
 

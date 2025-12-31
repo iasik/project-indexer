@@ -163,6 +163,7 @@ func (idx *Indexer) IndexProject(ctx context.Context, projectCfg *config.Project
 	processResult := idx.processFiles(ctx, filesToProcess, projectCfg, cache)
 	result.FilesIndexed = processResult.filesIndexed
 	result.ChunksCreated = processResult.chunksCreated
+	result.ChunksDeleted += processResult.chunksDeleted
 	result.OversizedChunks = processResult.oversizedChunks
 	result.Errors = append(result.Errors, processResult.errors...)
 
@@ -263,6 +264,7 @@ type fileToProcess struct {
 type processResult struct {
 	filesIndexed    int
 	chunksCreated   int
+	chunksDeleted   int
 	oversizedChunks []OversizedChunk
 	errors          []error
 }
@@ -369,13 +371,15 @@ func (idx *Indexer) processFiles(
 
 	// Result collection
 	type fileResult struct {
-		relPath   string
-		chunks    []chunker.Chunk
-		chunkIDs  []string
-		hash      string
-		oversized []OversizedChunk
-		duration  time.Duration
-		err       error
+		relPath       string
+		chunks        []chunker.Chunk
+		chunkIDs      []string
+		chunkHashes   map[string]string // chunk_id -> content_hash
+		hash          string
+		oversized     []OversizedChunk
+		deletedChunks []string // chunk IDs to delete
+		duration      time.Duration
+		err           error
 	}
 	resultCh := make(chan fileResult, len(files))
 
@@ -401,13 +405,30 @@ func (idx *Indexer) processFiles(
 				fileStart := time.Now()
 				chunks, err := idx.processFile(ctx, file, projectCfg)
 				fileDuration := time.Since(fileStart)
-				
+
 				var chunkIDs []string
 				var oversized []OversizedChunk
-				
+				chunkHashes := make(map[string]string)
+				var deletedChunks []string
+
+				// Get cached chunk hashes for this file
+				cachedHashes := cache.GetChunkHashes(file.relPath)
+
+				// Track which chunks are new/changed vs unchanged
+				var changedChunks []chunker.Chunk
+				newChunkIDs := make(map[string]bool)
+
 				for _, c := range chunks {
 					chunkIDs = append(chunkIDs, c.ID)
-					// Estimate token count using ~3.5 chars per token
+					chunkHashes[c.ID] = c.ContentHash
+					newChunkIDs[c.ID] = true
+
+					// Check if chunk has changed
+					if cachedHash, exists := cachedHashes[c.ID]; !exists || cachedHash != c.ContentHash {
+						changedChunks = append(changedChunks, c)
+					}
+
+					// Check for oversized chunks
 					estimatedTokens := int(float64(len(c.Content)) / charsPerToken)
 					if estimatedTokens > maxTokens {
 						oversized = append(oversized, OversizedChunk{
@@ -420,16 +441,25 @@ func (idx *Indexer) processFiles(
 					}
 				}
 
+				// Find deleted chunks (in cache but not in new chunks)
+				for cachedID := range cachedHashes {
+					if !newChunkIDs[cachedID] {
+						deletedChunks = append(deletedChunks, cachedID)
+					}
+				}
+
 				stats.Update(fileDuration)
 
 				resultCh <- fileResult{
-					relPath:   file.relPath,
-					chunks:    chunks,
-					chunkIDs:  chunkIDs,
-					hash:      file.contentHash,
-					oversized: oversized,
-					duration:  fileDuration,
-					err:       err,
+					relPath:       file.relPath,
+					chunks:        changedChunks, // Only changed chunks for embedding
+					chunkIDs:      chunkIDs,
+					chunkHashes:   chunkHashes,
+					hash:          file.contentHash,
+					oversized:     oversized,
+					deletedChunks: deletedChunks,
+					duration:      fileDuration,
+					err:           err,
 				}
 			}
 		}()
@@ -443,6 +473,7 @@ func (idx *Indexer) processFiles(
 
 	// Collect results and batch upsert
 	var allChunks []chunker.Chunk
+	var allDeletedChunks []string
 	var mu sync.Mutex
 
 	for res := range resultCh {
@@ -458,13 +489,15 @@ func (idx *Indexer) processFiles(
 		result.chunksCreated += len(res.chunks)
 		result.oversizedChunks = append(result.oversizedChunks, res.oversized...)
 		allChunks = append(allChunks, res.chunks...)
+		allDeletedChunks = append(allDeletedChunks, res.deletedChunks...)
 
-		// Update cache
+		// Update cache with chunk hashes
 		cache.Set(res.relPath, CacheEntry{
 			ContentHash: res.hash,
 			ModTime:     time.Now().UTC(),
 			IndexedAt:   time.Now().UTC(),
 			ChunkIDs:    res.chunkIDs,
+			ChunkHashes: res.chunkHashes,
 		})
 		mu.Unlock()
 	}
@@ -475,12 +508,24 @@ func (idx *Indexer) processFiles(
 	fmt.Printf("[Complete] %d/%d files processed in %s (avg: %s/file)\n",
 		processed, total, totalElapsed, avgDur.Round(time.Millisecond))
 
-	// Batch upsert all chunks
+	// Delete removed chunks from vector DB
+	if len(allDeletedChunks) > 0 {
+		fmt.Printf("[Deleting] %d stale chunks from vector database...\n", len(allDeletedChunks))
+		if err := idx.vectorDB.Delete(ctx, allDeletedChunks); err != nil {
+			result.errors = append(result.errors, fmt.Errorf("delete stale chunks: %w", err))
+		} else {
+			result.chunksDeleted += len(allDeletedChunks)
+		}
+	}
+
+	// Batch upsert only changed chunks
 	if len(allChunks) > 0 {
-		fmt.Printf("[Upserting] %d chunks to vector database...\n", len(allChunks))
+		fmt.Printf("[Upserting] %d changed chunks to vector database...\n", len(allChunks))
 		if err := idx.upsertChunks(ctx, allChunks); err != nil {
 			result.errors = append(result.errors, fmt.Errorf("upsert chunks: %w", err))
 		}
+	} else {
+		fmt.Printf("[Upserting] No chunks changed, skipping embedding.\n")
 	}
 
 	return result

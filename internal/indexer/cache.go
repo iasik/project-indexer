@@ -32,6 +32,9 @@ type CacheEntry struct {
 
 	// Chunk IDs generated from this file
 	ChunkIDs []string `json:"chunk_ids"`
+
+	// ChunkHashes maps chunk_id to content_hash for chunk-level diffing
+	ChunkHashes map[string]string `json:"chunk_hashes,omitempty"`
 }
 
 // CacheFile is the JSON structure stored on disk.
@@ -202,4 +205,29 @@ func (c *Cache) Stats() CacheStats {
 type CacheStats struct {
 	FileCount  int
 	ChunkCount int
+}
+
+// GetChunkHashes returns chunk hashes for a file.
+func (c *Cache) GetChunkHashes(filePath string) map[string]string {
+	entry, exists := c.Get(filePath)
+	if !exists || entry.ChunkHashes == nil {
+		return make(map[string]string)
+	}
+	// Return a copy to prevent mutation
+	result := make(map[string]string, len(entry.ChunkHashes))
+	for k, v := range entry.ChunkHashes {
+		result[k] = v
+	}
+	return result
+}
+
+// SetChunkHashes updates chunk hashes for a file.
+func (c *Cache) SetChunkHashes(filePath string, hashes map[string]string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	entry := c.entries[filePath]
+	entry.ChunkHashes = hashes
+	c.entries[filePath] = entry
+	c.dirty = true
 }

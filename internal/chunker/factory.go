@@ -10,9 +10,11 @@ import (
 
 // Factory creates chunkers based on file type and configuration.
 type Factory struct {
-	goChunker       *GoChunker
-	markdownChunker *MarkdownChunker
-	genericChunker  *GenericChunker
+	goChunker         *GoChunker
+	typescriptChunker *TypeScriptChunker
+	phpChunker        *PHPChunker
+	markdownChunker   *MarkdownChunker
+	genericChunker    *GenericChunker
 }
 
 // NewFactory creates a new chunker factory.
@@ -25,9 +27,11 @@ func NewFactory(cfg config.ChunkingConfig) *Factory {
 	}
 
 	return &Factory{
-		goChunker:       NewGoChunker(chunkCfg),
-		markdownChunker: NewMarkdownChunker(chunkCfg),
-		genericChunker:  NewGenericChunker(chunkCfg),
+		goChunker:         NewGoChunker(chunkCfg),
+		typescriptChunker: NewTypeScriptChunker(chunkCfg),
+		phpChunker:        NewPHPChunker(chunkCfg),
+		markdownChunker:   NewMarkdownChunker(chunkCfg),
+		genericChunker:    NewGenericChunker(chunkCfg),
 	}
 }
 
@@ -38,6 +42,10 @@ func (f *Factory) GetChunker(filePath string) Chunker {
 	switch ext {
 	case ".go":
 		return f.goChunker
+	case ".ts", ".tsx", ".js", ".jsx", ".vue":
+		return f.typescriptChunker
+	case ".php":
+		return f.phpChunker
 	case ".md", ".markdown":
 		return f.markdownChunker
 	default:
@@ -50,6 +58,10 @@ func (f *Factory) GetChunkerByStrategy(strategy string) Chunker {
 	switch strategy {
 	case "function":
 		return f.goChunker
+	case "typescript":
+		return f.typescriptChunker
+	case "php":
+		return f.phpChunker
 	case "heading":
 		return f.markdownChunker
 	case "fixed", "file":

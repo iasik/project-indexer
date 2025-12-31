@@ -93,17 +93,17 @@ func (s *Server) handleRetrieve(w http.ResponseWriter, r *http.Request) {
 	// Parse request body
 	var req RetrieveRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+		writeErrorWithCode(w, http.StatusBadRequest, "invalid request body: "+err.Error(), ErrCodeInvalidRequest)
 		return
 	}
 
 	// Validate required fields
 	if req.ProjectID == "" {
-		writeError(w, http.StatusBadRequest, "project_id is required")
+		writeErrorWithCode(w, http.StatusBadRequest, "project_id is required", ErrCodeMissingField)
 		return
 	}
 	if req.Query == "" {
-		writeError(w, http.StatusBadRequest, "query is required")
+		writeErrorWithCode(w, http.StatusBadRequest, "query is required", ErrCodeMissingField)
 		return
 	}
 
@@ -125,7 +125,7 @@ func (s *Server) handleRetrieve(w http.ResponseWriter, r *http.Request) {
 	queryVector, err := emb.Embed(ctx, req.Query)
 	if err != nil {
 		s.logger.Error("embedding failed", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to process query")
+		writeErrorWithCode(w, http.StatusInternalServerError, "failed to process query", ErrCodeEmbeddingFailed)
 		return
 	}
 
@@ -147,9 +147,13 @@ func (s *Server) handleRetrieve(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		s.logger.Error("search failed", "error", err)
-		writeError(w, http.StatusInternalServerError, "search failed")
+		writeErrorWithCode(w, http.StatusInternalServerError, "search failed", ErrCodeSearchFailed)
 		return
 	}
+
+	// Check if project exists (no results might mean project not indexed)
+	// Check if project exists (no results might mean project not indexed)
+	// For now, return empty results (could query Qdrant for project existence)
 
 	// Convert to response format
 	results := make([]RetrieveResult, len(searchResults))

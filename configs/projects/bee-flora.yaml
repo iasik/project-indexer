@@ -27,6 +27,10 @@ exclude_paths:
   - ".vscode"
   - "docker"
   - "certificates"
+  - "locales"
+  - "*.lock"
+  - "*-lock.*"
+  - "*.d.ts"
 
 chunking:
   min_tokens: 50

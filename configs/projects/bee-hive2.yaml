@@ -28,6 +28,9 @@ exclude_paths:
   - ".idea"
   - ".vscode"
   - "docker"
+  - "*.lock"
+  - "*-lock.*"
+  - "*.d.ts"
 
 chunking:
   min_tokens: 50

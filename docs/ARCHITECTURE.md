@@ -130,9 +130,16 @@ Deterministic kod/doküman parçalama.
 **Stratejiler:**
 | Dosya Tipi | Strateji | Açıklama |
 |------------|----------|----------|
-| `.go` | function | Go AST ile fonksiyon/struct bazlı |
-| `.md` | heading | `##`, `###` başlık bazlı |
+| `.go` | function | Go AST ile fonksiyon/struct/interface bazlı |
+| `.ts`, `.tsx`, `.js`, `.jsx`, `.vue` | typescript | Regex ile function/class/interface/type/enum/arrow function |
+| `.php` | php | Regex ile function/class/method/trait/interface/enum |
+| `.md`, `.markdown` | heading | `##`, `###` başlık bazlı |
 | diğer | fixed | Token sayısına göre sabit boyut |
+
+**TypeScript/PHP Regex Chunker Özellikleri:**
+- JSDoc/PHPDoc yorumları chunk'a dahil
+- Brace-depth tracking ile doğru symbol boundary tespiti
+- Decorators ve PHP 8 attributes desteği
 
 **Helper Merge Kuralı:**
 - `min_chunk_tokens` altındaki fonksiyonlar parent scope'a merge edilir
@@ -146,21 +153,25 @@ Deterministic kod/doküman parçalama.
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│ Source Code │ ──▶ │   Chunker   │ ──▶ │  Embedder   │ ──▶ │  Vector DB  │
-│             │     │             │     │             │     │             │
-│ .go, .md    │     │ Chunks +    │     │ []float32   │     │ Upsert      │
-│ .sql, ...   │     │ Metadata    │     │ vectors     │     │             │
+│ Source Code │ ──▶ │   Chunker   │ ──▶ │ Chunk-Level │ ──▶ │  Embedder   │
+│             │     │             │     │   Diffing   │     │             │
+│ .ts, .php   │     │ Chunks +    │     │ Compare     │     │ Only embed  │
+│ .go, .md    │     │ Metadata    │     │ hash cache  │     │ changed     │
 └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-       │                                                           │
-       ▼                                                           ▼
-┌─────────────┐                                           ┌─────────────┐
-│ Hash Cache  │                                           │ Metadata:   │
-│ (JSON)      │                                           │ project_id  │
-│             │                                           │ file_path   │
-│ Incremental │                                           │ symbol      │
-│ tracking    │                                           │ language    │
-└─────────────┘                                           └─────────────┘
+       │                   │                   │                   │
+       ▼                   ▼                   ▼                   ▼
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│ Hash Cache  │     │ Chunk Hash  │     │ Delete old  │     │  Vector DB  │
+│ (JSON)      │     │ per file    │     │ chunks      │     │  Upsert     │
+│ File level  │     │ chunk_id →  │     │ from Qdrant │     │             │
+│ + chunk lvl │     │ content_hash│     │             │     │             │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
 ```
+
+**Chunk-Level Diffing Avantajları:**
+- Dosya değiştiğinde sadece değişen chunk'lar re-embed edilir
+- Local cache kullanılır (Qdrant'a extra query yok)
+- Büyük dosyalarda önemli performans kazancı
 
 ### Retrieval Flow
 
@@ -307,15 +318,22 @@ source_path: "crm-backend"
 # Dahil edilecek dosya uzantıları
 include_extensions:
   - ".go"
+  - ".ts"
+  - ".tsx"
+  - ".php"
   - ".md"
   - ".sql"
 
 # Hariç tutulacak yollar (glob pattern)
 exclude_paths:
   - "vendor/"
+  - "node_modules/"
   - "testdata/"
   - "*_test.go"
   - ".git/"
+  - "*.lock"
+  - "*-lock.*"
+  - "*.d.ts"
 
 # =============================================================================
 # CHUNKING OVERRIDES
@@ -437,6 +455,60 @@ Her chunk aşağıdaki metadata ile Vector DB'ye kaydedilir:
 
 ---
 
+## Cache Yapısı
+
+Her proje için `data/index-cache/{project_id}.json` dosyasında cache tutulur:
+
+```json
+{
+  "project_id": "bee-flora",
+  "updated_at": "2025-12-31T01:07:37Z",
+  "files": {
+    "src/components/Button.tsx": {
+      "content_hash": "abc123...",
+      "mod_time": "2025-12-31T01:00:00Z",
+      "indexed_at": "2025-12-31T01:07:00Z",
+      "chunk_ids": ["bee-flora:src/components/Button.tsx:Button:def456"],
+      "chunk_hashes": {
+        "bee-flora:src/components/Button.tsx:Button:def456": "sha256:def456..."
+      }
+    }
+  }
+}
+```
+
+**Chunk-Level Diffing:**
+- `chunk_hashes` sayesinde dosya değiştiğinde sadece değişen chunk'lar re-embed edilir
+- Yeni chunk → embed + upsert
+- Değişen chunk → re-embed + upsert
+- Silinen chunk → Qdrant'tan delete
+
+---
+
+## Oversized Chunks Raporu
+
+Token limitini aşan chunk'lar `data/index-cache/reports/{project_id}-oversized.json` dosyasına kaydedilir:
+
+```json
+{
+  "project_id": "bee-flora",
+  "generated_at": "2025-12-31T01:07:37Z",
+  "total_count": 10,
+  "max_tokens_allowed": 2048,
+  "chunks": [
+    {
+      "file_path": "src/views/appointment/index.tsx",
+      "symbol": "AppointmentView",
+      "token_count": 2540,
+      "max_allowed": 2048,
+      "content_size_bytes": 6351
+    }
+  ]
+}
+```
+
+---
+
 ## HTTP API
 
 ### POST /retrieve
@@ -491,6 +563,28 @@ Semantic search ile ilgili kod parçalarını döner.
   },
   "version": "1.0.0"
 }
+```
+
+### Error Responses
+
+Tüm hatalar standart bir format ile döner:
+
+```json
+{
+  "error": "project_id is required",
+  "code": "MISSING_REQUIRED_FIELD",
+  "request_id": "a1b2c3d4e5f6g7h8"
+}
+```
+
+**Error Codes:**
+| Code | HTTP Status | Açıklama |
+|------|-------------|----------|
+| `INVALID_REQUEST` | 400 | Geçersiz JSON body |
+| `MISSING_REQUIRED_FIELD` | 400 | Zorunlu alan eksik |
+| `EMBEDDING_FAILED` | 500 | Embedding oluşturulamadı |
+| `SEARCH_FAILED` | 500 | Vector DB sorgusu başarısız |
+| `SERVICE_DEGRADED` | 503 | Provider bağlantısı sorunlu |
 ```
 
 ---
@@ -597,6 +691,7 @@ curl -X POST http://localhost:8080/retrieve \
 | Boş dosya | Skip edilir, indexlenmez |
 | Binary dosya | Skip edilir (extension filter) |
 | Çok büyük dosya (>1MB) | Uyarı loglanır, max_tokens ile chunklara bölünür |
+| Oversized chunk (>2048 token) | Embedding alınır (truncate), rapor dosyasına eklenir |
 | UTF-8 olmayan dosya | Skip edilir, hata loglanır |
 | Proje config bulunamadı | Hata döner, indexleme durmaz |
 | Vector DB bağlantı hatası | Retry (3x), sonra fail |
@@ -606,9 +701,12 @@ curl -X POST http://localhost:8080/retrieve \
 
 1. **Batch Embedding**: Chunk'lar batch_size'a göre gruplandırılarak embedding alınır
 2. **Parallel File Processing**: Dosyalar goroutine'ler ile paralel işlenir
-3. **Incremental Index**: Hash cache ile sadece değişen dosyalar işlenir
-4. **Connection Pooling**: HTTP client'lar connection reuse yapar
-5. **Vector DB Bulk Upsert**: Chunk'lar tek seferde toplu eklenir
+3. **Chunk-Level Diffing**: Dosya değiştiğinde sadece değişen chunk'lar re-embed edilir
+4. **Local Hash Cache**: Chunk hash'leri local cache'de saklanır (Qdrant'a extra query yok)
+5. **Connection Pooling**: HTTP client'lar connection reuse yapar
+6. **Vector DB Bulk Upsert**: Chunk'lar tek seferde toplu eklenir
+7. **Progress Reporting**: ETA hesaplamalı batch-level ilerleme gösterimi
+8. **Oversized Detection**: Token limitini aşan chunk'lar JSON rapora kaydedilir
 
 ### Önerilen Limitler
 

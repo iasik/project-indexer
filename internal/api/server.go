@@ -3,6 +3,8 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -185,7 +187,45 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	json.NewEncoder(w).Encode(data)
 }
 
-// writeError writes an error response.
+// ErrorCode represents machine-parseable error codes.
+type ErrorCode string
+
+const (
+	ErrCodeInvalidRequest   ErrorCode = "INVALID_REQUEST"
+	ErrCodeMissingField     ErrorCode = "MISSING_REQUIRED_FIELD"
+	ErrCodeProjectNotFound  ErrorCode = "PROJECT_NOT_FOUND"
+	ErrCodeEmbeddingFailed  ErrorCode = "EMBEDDING_FAILED"
+	ErrCodeSearchFailed     ErrorCode = "SEARCH_FAILED"
+	ErrCodeInternalError    ErrorCode = "INTERNAL_ERROR"
+	ErrCodeServiceDegraded  ErrorCode = "SERVICE_DEGRADED"
+)
+
+// ErrorResponse is the standard error response format.
+type ErrorResponse struct {
+	Error     string    `json:"error"`
+	Code      ErrorCode `json:"code"`
+	RequestID string    `json:"request_id"`
+}
+
+// generateRequestID creates a short random request ID.
+func generateRequestID() string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// writeError writes an error response with code and request ID.
 func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
+	writeErrorWithCode(w, status, message, ErrCodeInternalError)
+}
+
+// writeErrorWithCode writes an error response with a specific error code.
+func writeErrorWithCode(w http.ResponseWriter, status int, message string, code ErrorCode) {
+	requestID := generateRequestID()
+	w.Header().Set("X-Request-ID", requestID)
+	writeJSON(w, status, ErrorResponse{
+		Error:     message,
+		Code:      code,
+		RequestID: requestID,
+	})
 }
